@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天记录查看器</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>聊天记录</h1>
+            <div class="controls">
+                <form method="get" class="filter-form">
+                    <!-- <label for="user-filter">用户</label> -->
+                    <select id="user-filter" name="user">
+                        <option value="">所有用户</option>
+                        {% for user in users %}
+                        <option value="{{ user }}" {% if request.args.get('user') == user %}selected{% endif %}>{{ user }}</option>
+                        {% endfor %}
+                    </select>
+                    <!-- <label for="keyword-filter">关键词</label> -->
+                    <input type="text" id="keyword-filter" name="keyword" placeholder="输入关键词..." value="{{ request.args.get('keyword', '') }}">
+                    <button type="submit">筛选</button>
+                </form>
+                <div class="settings">
+                    <button id="settings-btn">设置</button>
+                    <div id="settings-dropdown" class="settings-dropdown-content">
+                        <label><input type="checkbox" class="column-toggle" data-column="user-type"> 用户类型</label>
+                        <label><input type="checkbox" class="column-toggle" data-column="v2-name"> V2账户名</label>
+                        <label><input type="checkbox" class="column-toggle" data-column="user-id"> 用户ID</label>
+                    </div>
+                </div>
+                <a href="{{ url_for('logout') }}" class="logout-button">登出</a>
+            </div>
+        </header>
+        
+        <div class="chat-box">
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>用户</th>
+                        <th class="toggleable-col user-type-col" data-column="user-type">用户类型</th>
+                        <th class="toggleable-col v2-name-col" data-column="v2-name">V2账户名</th>
+                        <th class="toggleable-col user-id-col" data-column="user-id">用户ID</th>
+                        <th>消息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for msg in messages %}
+                    <tr
+                        data-user="{{ msg.user }}"
+                        data-user-type="{{ msg.user_type }}"
+                        data-v2-name="{{ msg.v2_name or 'N/A' }}"
+                        data-user-id="{{ msg.user_id or 'N/A' }}">
+                        <td>{{ msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td><a href="#" class="user-link">{{ msg.user }}</a></td>
+                        <td class="toggleable-col user-type-col" data-column="user-type">{{ msg.user_type }}</td>
+                        <td class="toggleable-col v2-name-col" data-column="v2-name">{{ msg.v2_name or 'N/A' }}</td>
+                        <td class="toggleable-col user-id-col" data-column="user-id">{{ msg.user_id or 'N/A' }}</td>
+                        <td>
+                            {% if keyword %}
+                                {{ msg.message | replace(keyword, '<span class="highlight">' + keyword + '</span>') | safe }}
+                            {% else %}
+                                {{ msg.message }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6">没有找到聊天记录。</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 用户详情模态框 -->
+    <div id="user-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>用户详情</h2>
+            <p><strong>显示名称:</strong> <span id="modal-user-display"></span></p>
+            <p><strong>用户类型:</strong> <span id="modal-user-type"></span></p>
+            <p><strong>V2 账户名:</strong> <span id="modal-v2-name"></span></p>
+            <p><strong>用户 ID:</strong> <span id="modal-user-id"></span></p>
+            <button id="filter-by-user-btn">只看该用户</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 列可见性切换
+            const columnToggles = document.querySelectorAll('.column-toggle');
+            const table = document.querySelector('table');
+
+            function setColumnVisibility(columnName, isVisible) {
+                const cells = document.querySelectorAll(`[data-column="${columnName}"]`);
+                cells.forEach(cell => {
+                    cell.style.display = isVisible ? '' : 'none';
+                });
+            }
+
+            columnToggles.forEach(toggle => {
+                const columnName = toggle.dataset.column;
+                const isVisible = localStorage.getItem(`col-visible-${columnName}`) === 'true';
+                toggle.checked = isVisible;
+                setColumnVisibility(columnName, isVisible);
+
+                toggle.addEventListener('change', () => {
+                    const isVisible = toggle.checked;
+                    localStorage.setItem(`col-visible-${columnName}`, isVisible);
+                    setColumnVisibility(columnName, isVisible);
+                });
+            });
+
+            // 设置菜单
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsDropdown = document.getElementById('settings-dropdown');
+            settingsBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                settingsDropdown.classList.toggle('show');
+            });
+            window.addEventListener('click', (event) => {
+                if (!event.target.matches('#settings-btn')) {
+                    if (settingsDropdown.classList.contains('show')) {
+                        settingsDropdown.classList.remove('show');
+                    }
+                }
+            });
+
+            // 用户详情模态框
+            const modal = document.getElementById('user-modal');
+            const closeBtn = document.querySelector('.close-btn');
+            const userLinks = document.querySelectorAll('.user-link');
+
+            userLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const row = e.target.closest('tr');
+                    document.getElementById('modal-user-display').textContent = row.dataset.user;
+                    document.getElementById('modal-user-type').textContent = row.dataset.userType;
+                    document.getElementById('modal-v2-name').textContent = row.dataset.v2Name;
+                    document.getElementById('modal-user-id').textContent = row.dataset.userId;
+                    
+                    const filterBtn = document.getElementById('filter-by-user-btn');
+                    filterBtn.onclick = () => {
+                        window.location.href = `/?user=${encodeURIComponent(row.dataset.user)}`;
+                    };
+
+                    modal.style.display = 'block';
+                });
+            });
+
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+
+            window.addEventListener('click', (event) => {
+                if (event.target == modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
