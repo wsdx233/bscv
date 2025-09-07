@@ -45,3 +45,60 @@ def logout():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=config.PORT, debug=True)
+
+
+from datetime import datetime
+
+@app.route('/api/chat', methods=['GET'])
+def api_chat():
+    token = request.args.get('token')
+    if not token or token not in config.API_TOKENS:
+        return "未授权的访问", 401
+
+    chat_messages = parse_log(config.CHAT_LOG_PATH)
+
+    # 筛选参数
+    from_time_str = request.args.get('from')
+    to_time_str = request.args.get('to')
+    search_keyword = request.args.get('search')
+    user_filter = request.args.get('user')
+    count = request.args.get('count', type=int)
+    reverse = request.args.get('reverse', 'false').lower() == 'true'
+
+    # 时间筛选
+    if from_time_str:
+        try:
+            from_time = datetime.fromisoformat(from_time_str)
+            chat_messages = [msg for msg in chat_messages if msg['timestamp'] >= from_time]
+        except ValueError:
+            return "无效的 'from' 时间格式. 请使用 ISO 格式 (YYYY-MM-DDTHH:MM:SS).", 400
+    
+    if to_time_str:
+        try:
+            to_time = datetime.fromisoformat(to_time_str)
+            chat_messages = [msg for msg in chat_messages if msg['timestamp'] <= to_time]
+        except ValueError:
+            return "无效的 'to' 时间格式. 请使用 ISO 格式 (YYYY-MM-DDTHH:MM:SS).", 400
+
+    # 关键词筛选
+    if search_keyword:
+        chat_messages = [msg for msg in chat_messages if search_keyword.lower() in msg['message'].lower()]
+
+    # 用户筛选
+    if user_filter:
+        chat_messages = [msg for msg in chat_messages if msg['user'] == user_filter]
+
+    # 数量和顺序控制
+    if count is not None:
+        if reverse:
+            chat_messages = chat_messages[:count]
+        else:
+            chat_messages = chat_messages[-count:]
+            
+    # 格式化输出
+    output_lines = [
+        f"{msg['timestamp'].isoformat()} [{msg['user']}] {msg['message']}"
+        for msg in chat_messages
+    ]
+    
+    return "\n".join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
