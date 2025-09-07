@@ -7,5 +7,4 @@ CHAT_LOG_PATH = 'chat.log'
 
 # 用于 API 访问的有效 token 列表
 API_TOKENS = [
-    'your_secret_token_here'
 ]
