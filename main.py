@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, session
 import config
 from parser import parse_log
 
+from datetime import datetime
+
 app = Flask(__name__)
 app.secret_key = 'some_random_secret_key'  # 用于 session 加密
 
@@ -43,11 +45,6 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('login'))
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=config.PORT, debug=True)
-
-
-from datetime import datetime
 
 @app.route('/api/chat', methods=['GET'])
 def api_chat():
@@ -102,3 +99,8 @@ def api_chat():
     ]
     
     return "\n".join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=config.PORT, debug=True)
+
